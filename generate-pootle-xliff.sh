@@ -55,7 +55,7 @@ for VERSION in "${!BRANCHES[@]}"; do
 			fi
 	
 			TARGET_NAME=${EXTENSION_TARGET}/templates/locallang.${T3ID}.xlf
-			cp $FILE ${TARGET_NAME}
+			echo "TODO: merge '$FILE' into '${TARGET_NAME}'"
 			echo "locallang.${T3ID}.xlf ${FILE}" >> ${MAPPING}
 	
 			KEYS=${EXTENSION_TARGET}/.typo3/${VERSION}.${T3ID}.keys
