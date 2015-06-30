@@ -29,37 +29,37 @@ for VERSION in ${VERSIONS}; do
 	git checkout ${BRANCHES[$VERSION]}
 	git pull
 	popd >/dev/null
-	
+
 	pushd ${SOURCES}/typo3/sysext/ >/dev/null
 
 	SYSTEM_EXTENSIONS=$(find . -type d -maxdepth 1 | cut -b3-)
 	for EXTENSION in ${SYSTEM_EXTENSIONS}; do
-	
+
 		if [ $(find ${EXTENSION} -name \*.xlf | wc -l) -eq 0 ]; then
 			continue
 		fi
-	
+
 		mkdir -p ${TARGET}/TYPO3.TYPO3.core.${EXTENSION}
-	
+
 		pushd ${EXTENSION} >/dev/null
 		EXTENSION_TARGET=${TARGET}/TYPO3.TYPO3.core.${EXTENSION}
 		MAPPING=${EXTENSION_TARGET}/.typo3/${VERSION}.filemapping
-	
+
 		mkdir -p ${EXTENSION_TARGET}/.typo3
 		mkdir -p ${EXTENSION_TARGET}/templates
 		rm -f ${MAPPING}
 		touch ${MAPPING}
-	
+
 		FILES=$(find . -name \*.xlf);
 		for FILE in ${FILES}; do
 			T3ID=$(xmlstarlet sel -t -m "//xliff/file" -v "@t3:id" ${FILE} 2>/dev/null)
 			if [ -z "${T3ID}" ]; then
 				continue
 			fi
-	
+
 			TARGET_NAME=${EXTENSION_TARGET}/templates/locallang.${T3ID}.xlf
 			echo "locallang.${T3ID}.xlf ${FILE}" >> ${MAPPING}
-	
+
 			KEYS=${EXTENSION_TARGET}/.typo3/${VERSION}.${T3ID}.keys
 			xmlstarlet sel -t -m "//xliff/file/body/trans-unit" -v "@id" -n ${FILE} | sort > ${KEYS}
 
@@ -83,17 +83,31 @@ for VERSION in ${VERSIONS}; do
 					echo '</xliff>' >> ${TARGET_NAME}.tmp
 
 					mv ${TARGET_NAME}.tmp ${TARGET_NAME}
-					# TODO: deprecated stuff as Pootle note
-					# TODO: override label for existing key if it was changed (tolerated with some restrictions)
+
+					REMOVED_KEYS=$(diff /tmp/existing.keys ${KEYS} | grep '^< ' | cut -b3-)
+					for REMOVED_KEY in ${REMOVED_KEYS}; do
+						# Look for existing deprecation note
+						NOTE=$(xmlstarlet sel -t -m "//trans-unit[@id='${REMOVED_KEY}']" -v "note[@from='developer']" ${TARGET_NAME})
+						if [ -z "${NOTE}" ]; then
+							# The label is not yet marked as "deprecated", do it now!
+							xmlstarlet ed \
+								-s "//trans-unit[@id='${REMOVED_KEY}']" \
+								-t elem -n note -v "This label is deprecated (not used anymore) since ${VERSION}" \
+								-i "//trans-unit[@id='${REMOVED_KEY}']/note" -t attr -n from -v developer ${TARGET_NAME} > ${TARGET_NAME}.tmp
+							mv ${TARGET_NAME}.tmp ${TARGET_NAME}
+						fi
+					done
 				fi
+
+				# TODO: override label for existing key if it was changed (tolerated with some restrictions)
 			else
 				# File did not exist
 				cp ${FILE} ${TARGET_NAME}
 			fi
 		done
-	
+
 		popd >/dev/null
 	done
-	
+
 	popd >/dev/null
 done
