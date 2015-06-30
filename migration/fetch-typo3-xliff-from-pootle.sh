@@ -19,8 +19,12 @@ pushd ${TARGET} >/dev/null
 
 tar xzvf pootle-typo3.tar.gz
 rm pootle-typo3.tar.gz
+git init
+echo ".typo3/" > .gitignore
+git add .
+git commit -m "[TASK] Import from Pootle 1.9.0"
 
-PROJECTS=$(find . -type d -maxdepth 1 | cut -b3-)
+PROJECTS=$(find . -type d -maxdepth 1 | cut -b3- | grep -v .git)
 for PROJECT in ${PROJECTS}; do
 	pushd ${PROJECT} >/dev/null
 
@@ -54,6 +58,9 @@ for PROJECT in ${PROJECTS}; do
 		                        
 		popd >/dev/null
 	done
+
+	git add .
+	git commit -m "[TASK] Migrate ${PROJECT}"
 
 	popd >/dev/null
 done
