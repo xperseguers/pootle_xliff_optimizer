@@ -64,12 +64,14 @@ for VERSION in ${VERSIONS}; do
 			xmlstarlet sel -t -m "//xliff/file/body/trans-unit" -v "@id" -n ${FILE} | sort > ${KEYS}
 
 			if [ -f "${TARGET_NAME}" ]; then
+				DIRTY=0
+
 				# Extract existing keys
 				xmlstarlet sel -t -m "//xliff/file/body/trans-unit" -v "@id" -n ${TARGET_NAME} | sort > /tmp/existing.keys
 
 				diff -q ${KEYS} /tmp/existing.keys >/dev/null
 				if [ $? -eq 1 ]; then
-					# Preparing new XLIFF
+					# START: Preparing new XLIFF
 					cat ${TARGET_NAME} | grep -v "</xliff>" | grep -v "</file>" | grep -v "</body>" > ${TARGET_NAME}.tmp
 
 					NEW_KEYS=$(diff /tmp/existing.keys ${KEYS} | grep '^> ' | cut -b3-)
@@ -83,6 +85,7 @@ for VERSION in ${VERSIONS}; do
 					echo '</xliff>' >> ${TARGET_NAME}.tmp
 
 					mv ${TARGET_NAME}.tmp ${TARGET_NAME}
+					# END: Preparing new XLIFF
 
 					REMOVED_KEYS=$(diff /tmp/existing.keys ${KEYS} | grep '^< ' | cut -b3-)
 					for REMOVED_KEY in ${REMOVED_KEYS}; do
@@ -98,6 +101,48 @@ for VERSION in ${VERSIONS}; do
 						fi
 					done
 
+					DIRTY=1
+				fi
+
+				# Remove temporary file
+				rm -f /tmp/existing.keys
+
+				# Loop over all keys in file and update source element if needed (this is tolerated with some restrictions)
+				for KEY in $(cat ${KEYS}); do
+					CURRENT_VALUE=$(xmlstarlet sel -t -c "//trans-unit[@id='${KEY}']" ${TARGET_NAME} | sed -e 's/ xmlns:t3="[^"]*"//g')
+					NEW_VALUE=$(xmlstarlet sel -t -c "//trans-unit[@id='${KEY}']" ${FILE} | sed -e 's/ xmlns:t3="[^"]*"//g')
+					if [ "${CURRENT_VALUE}" != "${NEW_VALUE}" ]; then
+						# No double quotes here around ${CURRENT_VALUE} since we don't want to keep the internal line breaks!
+						# Using quotemeta make it safe for use in a regular expression
+						ELEMENT=$(echo -n ${CURRENT_VALUE} | perl -pe 's|^(<trans-unit .*?>).*$|\1|' | perl -e 'print quotemeta(<STDIN>)')
+						# New lines should be escaped in replacement string
+						# Beware of special characters changing string to UPPER CASE and breaking the generated XLIFF:
+						# see: http://perldoc.perl.org/perlre.html#Escape-sequences
+						REPLACEMENT=$(echo -n "${NEW_VALUE}" | sed 's/\\/\\\\/g' | sed 's/|/\\|/g' | perl -pe 'BEGIN{undef $/;} s|\n|\\n|smg')
+
+						perl -pe "BEGIN{undef $/;} s|${ELEMENT}.*?</trans-unit>|${REPLACEMENT}|smg" ${TARGET_NAME} > ${TARGET_NAME}.tmp
+						if [ $? -ne 0 ]; then
+							# THIS SHOULD NEVER HAPPEN BUT WHO KNOWS?
+							echo "Real trouble happened with file ${TARGET_NAME} and key '${KEY}'" >&2
+							exit 1
+						fi
+
+						# Check the correctness of the generated XLIFF
+						xmlstarlet -q val ${TARGET_NAME}.tmp
+						if [ $? -ne 0 ]; then
+							echo "This is really bad! ${TARGET_NAME} is about to get broken!" >&2
+							echo "Key: ${KEY}" >&2
+							exit 2
+						fi
+
+						# Everything's fine: replace original file
+						mv ${TARGET_NAME}.tmp ${TARGET_NAME}
+
+						DIRTY=1
+					fi
+				done
+
+				if [ $DIRTY -eq 1 ]; then
 					# Reset the date of last modification
 					xmlstarlet ed -u "xliff/file/@date" -v "$(date '+%Y-%m-%dT%H:%M:%SZ')" ${TARGET_NAME} > ${TARGET_NAME}.tmp
 					mv ${TARGET_NAME}.tmp ${TARGET_NAME}
@@ -106,8 +151,6 @@ for VERSION in ${VERSIONS}; do
 					xmlstarlet fo -t ${TARGET_NAME} > ${TARGET_NAME}.tmp
 					mv ${TARGET_NAME}.tmp ${TARGET_NAME}
 				fi
-
-				# TODO: override label for existing key if it was changed (tolerated with some restrictions)
 			else
 				# File did not exist
 				cp ${FILE} ${TARGET_NAME}
