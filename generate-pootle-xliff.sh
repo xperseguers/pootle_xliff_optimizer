@@ -98,6 +98,10 @@ for VERSION in ${VERSIONS}; do
 						fi
 					done
 
+					# Reset the date of last modification
+					xmlstarlet ed -u "xliff/file/@date" -v "$(date '+%Y-%m-%dT%H:%M:%SZ')" ${TARGET_NAME} > ${TARGET_NAME}.tmp
+					mv ${TARGET_NAME}.tmp ${TARGET_NAME}
+
 					# Reformat XLF with proper indent
 					xmlstarlet fo -t ${TARGET_NAME} > ${TARGET_NAME}.tmp
 					mv ${TARGET_NAME}.tmp ${TARGET_NAME}
