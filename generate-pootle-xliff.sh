@@ -97,6 +97,10 @@ for VERSION in ${VERSIONS}; do
 							mv ${TARGET_NAME}.tmp ${TARGET_NAME}
 						fi
 					done
+
+					# Reformat XLF with proper indent
+					xmlstarlet fo -t ${TARGET_NAME} > ${TARGET_NAME}.tmp
+					mv ${TARGET_NAME}.tmp ${TARGET_NAME}
 				fi
 
 				# TODO: override label for existing key if it was changed (tolerated with some restrictions)
