@@ -141,6 +141,14 @@ for VERSION in ${VERSIONS}; do
 							exit 2
 						fi
 
+						NUMBER_OF_KEYS_OLD=$(xmlstarlet sel -t -m "//trans-unit" -v "@id" -n ${TARGET_NAME} | wc -l)
+						NUMBER_OF_KEYS_NEW=$(xmlstarlet sel -t -m "//trans-unit" -v "@id" -n ${TARGET_NAME}.tmp | wc -l)
+						if [ ${NUMBER_OF_KEYS_OLD} -ne ${NUMBER_OF_KEYS_NEW} ]; then
+							echo "This is really bad! ${TARGET_NAME}.tmp has now another amount of keys than ${TARGET_NAME}" >&2
+							echo "Key: ${KEY}" >&2
+							exit 3
+						fi
+
 						# Everything's fine: replace original file
 						mv ${TARGET_NAME}.tmp ${TARGET_NAME}
 
