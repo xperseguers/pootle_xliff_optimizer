@@ -3,10 +3,11 @@
 source TYPO3.conf
 
 if [ ! -d ${SOURCES}/.git ]; then
+	echo "[INIT]    Cloning TYPO3 CMS sources into ${SOURCES}"
 	rm -rf ${SOURCES}
 	mkdir -p ${SOURCES}
 	pushd ${SOURCES} >/dev/null
-	git clone ${GIT} .
+	git clone ${GIT} . >/dev/null 2>&1
 	popd >/dev/null
 fi
 
@@ -15,25 +16,30 @@ if [ -d ${TARGET} ]; then
 fi
 
 # Update TYPO3 sources
+echo "[INFO]    Fetching latest changes from TYPO3 CMS sources"
 pushd ${SOURCES} >/dev/null
-git checkout master
-git reset --hard origin/master
-git fetch
+git checkout master >/dev/null 2>&1
+git reset --hard origin/master >/dev/null 2>&1
+git fetch >/dev/null 2>&1
 popd >/dev/null
 
 BRANCHES_INDEXES=( ${!BRANCHES[@]} )
 IFS=$'\n' VERSIONS=$(echo -e "${BRANCHES_INDEXES[@]/%/\\n}" | sed -e 's/^ *//' -e '/^$/d' | sort)
 for VERSION in ${VERSIONS}; do
 	# Switch to corresponding TYPO3 branch
+	echo "[INFO]    ------------------------------------------------------"
+	echo "[INFO]    Switching to ${VERSION}"
+	echo "[INFO]    ------------------------------------------------------"
 	pushd ${SOURCES} >/dev/null
-	git checkout ${BRANCHES[$VERSION]}
-	git pull
+	git checkout ${BRANCHES[$VERSION]} >/dev/null 2>&1
+	git pull >/dev/null 2>&1
 	popd >/dev/null
 
 	pushd ${SOURCES}/typo3/sysext/ >/dev/null
 
 	SYSTEM_EXTENSIONS=$(find . -type d -maxdepth 1 | cut -b3-)
 	for EXTENSION in ${SYSTEM_EXTENSIONS}; do
+		echo "[INFO]    Updating XLIFF for EXT:${EXTENSION}"
 
 		if [ $(find ${EXTENSION} -name \*.xlf | wc -l) -eq 0 ]; then
 			continue
@@ -61,13 +67,13 @@ for VERSION in ${VERSIONS}; do
 			echo "locallang.${T3ID}.xlf ${FILE}" >> ${MAPPING}
 
 			KEYS=${EXTENSION_TARGET}/.typo3/${VERSION}.${T3ID}.keys
-			xmlstarlet sel -t -m "//xliff/file/body/trans-unit" -v "@id" -n ${FILE} | sort > ${KEYS}
+			xmlstarlet sel -t -m "//trans-unit" -v "@id" -n ${FILE} | sort > ${KEYS}
 
 			if [ -f "${TARGET_NAME}" ]; then
 				DIRTY=0
 
 				# Extract existing keys
-				xmlstarlet sel -t -m "//xliff/file/body/trans-unit" -v "@id" -n ${TARGET_NAME} | sort > /tmp/existing.keys
+				xmlstarlet sel -t -m "//trans-unit" -v "@id" -n ${TARGET_NAME} | sort > /tmp/existing.keys
 
 				diff -q ${KEYS} /tmp/existing.keys >/dev/null
 				if [ $? -eq 1 ]; then
